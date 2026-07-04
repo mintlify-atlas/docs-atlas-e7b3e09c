@@ -8,7 +8,7 @@ Gestor de Tareas Django organises work around a single core model called `Tarea`
 
 ## Creating a Task
 
-Any user (authenticated or not) can open the task creation form at `/crear/`. On a successful `POST`, the new `Tarea` is saved and the browser is redirected to its detail page at `/detalle/<id>/`.
+Any user (authenticated or not) can open the task creation form at `/crear/`. The `crear_tarea` view does **not** carry the `@login_required` decorator, so unauthenticated visitors may also submit new tasks. On a successful `POST`, the new `Tarea` is saved and the browser is redirected to its detail page at `/detalle/<id>/`.
 
 <Steps>
   <Step title="Navigate to the creation form">
@@ -58,6 +58,10 @@ Any user (authenticated or not) can open the task creation form at `/crear/`. On
     <ParamField path="fecha_limite" type="date">
       Optional deadline. Use the native date picker or type a date in `YYYY-MM-DD` format. Leave blank if there is no fixed deadline.
     </ParamField>
+
+    <Note>
+      `fecha_creada` is set automatically by the database (`auto_now_add=True`) and is **not** included in `TareaForm`. You cannot set or change it through the create or edit form.
+    </Note>
   </Step>
 
   <Step title="Submit and confirm">

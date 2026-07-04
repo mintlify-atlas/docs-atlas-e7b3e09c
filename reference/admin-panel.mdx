@@ -1,7 +1,7 @@
 ---
-title: "Django Admin Panel Configuration and Usage"
+title: "Django Admin Panel: Setup, Access, and Registered Models"
 sidebarTitle: "Admin Panel"
-description: "How to access and use the Django admin panel in Gestor de Tareas Django: superuser setup, registered models, and user management."
+description: "Access the Gestor de Tareas Django admin at /admin/: create a superuser, manage registered Tarea records, and add application users."
 ---
 
 Gestor de Tareas Django ships with Django's built-in administration interface enabled out of the box. The admin panel is mounted at `/admin/` and gives authenticated staff users a full create, read, update, and delete interface for any registered model — in this project, the `Tarea` model. No additional packages are required; everything is provided by `django.contrib.admin`, which is listed in `INSTALLED_APPS` in `mi_proyecto/settings.py`.

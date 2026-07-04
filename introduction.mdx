@@ -50,7 +50,7 @@ Priority can be updated at any time directly from both the Kanban and List views
 
 ## Project Structure
 
-The repository is organized around a single Django project package (`mi_proyecto`) and a single application (`tareas`). The key directories are:
+The repository is organized around a single Django project package (`mi_proyecto`) and a single application (`tareas`). The key directories and files are:
 
 ```
 gestor-tarea-django/
@@ -66,7 +66,11 @@ gestor-tarea-django/
 │   ├── views.py
 │   ├── forms.py
 │   ├── admin.py
+│   ├── apps.py
+│   ├── tests.py
 │   ├── urls.py
+│   │
+│   ├── migrations/       # Auto-generated database migration files
 │   │
 │   ├── templates/        # HTML templates for every page
 │   │   └── tareas/
@@ -76,12 +80,14 @@ gestor-tarea-django/
 │   │       ├── formulario.html
 │   │       ├── confirmar_eliminar.html
 │   │       ├── importar_csv.html
+│   │       ├── tarjeta_tarea.html
 │   │       └── login.html
 │   │
 │   └── static/           # App-scoped static assets
 │       └── tareas/
 │           └── style.css
 │
+├── docs/                 # Project documentation assets (PDF, sample CSV)
 ├── manage.py             # Django management entry point
 ├── requirements.txt      # Python dependencies
 └── db.sqlite3            # SQLite database (created after migrations)

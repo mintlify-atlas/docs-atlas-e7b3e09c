@@ -112,10 +112,15 @@ Most views require an active login session. The `@login_required` decorator is a
   </Accordion>
 </AccordionGroup>
 
-### View without `@login_required`
+### Views without `@login_required`
 
 <Note>
-  `crear_tarea` at `/crear/` is **not** decorated with `@login_required` in the current source code. This means unauthenticated users can access the task creation form and submit new tasks without logging in. If your deployment requires authentication for all task operations, add the `@login_required` decorator to `crear_tarea` in `tareas/views.py`.
+  Two views are **not** decorated with `@login_required` in the current source code:
+
+  - **`crear_tarea`** at `/crear/` — unauthenticated users can access the task creation form and submit new tasks without logging in.
+  - **`eliminar_tareas_seleccionadas`** at `POST /eliminar-seleccionadas/` — unauthenticated users can submit a bulk-delete request without logging in.
+
+  If your deployment requires authentication for all task operations, add the `@login_required` decorator to both `crear_tarea` and `eliminar_tareas_seleccionadas` in `tareas/views.py`.
 </Note>
 
 ---

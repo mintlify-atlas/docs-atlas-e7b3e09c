@@ -1,45 +1,55 @@
 ---
-title: "Environment Variables and Settings Reference"
+title: "Environment Variables and Settings Reference for Production"
 sidebarTitle: "Environment"
-description: "A complete reference for all key settings in mi_proyecto/settings.py and how to override each one via environment variables for a secure production deployment."
+description: "Complete reference for all settings in mi_proyecto/settings.py, with exact default values and guidance on overriding them securely for production."
 ---
 
-Gestor de Tareas Django stores its entire configuration in `mi_proyecto/settings.py`. The file ships with development-friendly defaults — `DEBUG = True`, a hardcoded `SECRET_KEY`, and `ALLOWED_HOSTS = ['*']` — that are intentionally unsafe for production. The recommended approach is to keep `settings.py` in version control unchanged and override the sensitive or environment-specific values through OS environment variables at runtime. This keeps secrets out of source code and makes it trivial to use different values across development, staging, and production environments.
+Gestor de Tareas Django stores its entire configuration in `mi_proyecto/settings.py`. The file ships with development-friendly defaults — `DEBUG = True`, a hardcoded `SECRET_KEY`, and `ALLOWED_HOSTS = ['*']` — that are intentionally unsafe for production. Importantly, **the default `settings.py` does not read from environment variables at all**; it uses hard-coded values. The recommended approach for production is to modify `settings.py` to read sensitive values from the environment at runtime, keeping secrets out of source code and making it easy to use different values across development, staging, and production.
 
 ## Recommended Pattern
 
-Add the following overrides at the top of `settings.py` (after the existing imports) so that each critical value is read from the environment when present and falls back to a safe default only for local development.
+Add the following overrides at the top of `settings.py` (after the existing imports) so that each critical value is read from the environment when present and falls back to the hard-coded default for local development. **This is not what the file currently does — it is what you should add before going to production.**
 
-```python settings.py (production overrides)
+```python
+# settings.py — add these lines after "from pathlib import Path"
 import os
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'change-me-in-production')
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-@hc_xr=e4$pg=)=)va7v6=2gdd%q5i#@i8wgay_9hig@_-n$wb'
+)
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1').split(',')
 ```
 
-Once these lines are in place, you can inject values through shell exports, a `.env` file loaded by `python-dotenv`, a systemd `EnvironmentFile`, or the environment variable panel of your PaaS (such as Render).
+Once these lines are in place, you can inject values through shell exports, a systemd `EnvironmentFile`, or the environment variable panel of your PaaS (such as Render). See the [Production Deployment guide](/deployment/production) for concrete examples.
 
 ## Settings Reference
 
-The following settings are present in `mi_proyecto/settings.py`. Each entry describes the default value as it exists in the repository, the expected type, and how the setting affects the running application.
+The following settings are present in `mi_proyecto/settings.py`. Each entry shows the exact default value as committed in the repository, the expected type, and how the setting affects the running application.
 
 <ParamField path="SECRET_KEY" type="string" required>
-  Django's cryptographic signing key. Used to sign cookies, CSRF tokens, session data, and password-reset links. The repository contains a public placeholder value (`django-insecure-@hc_xr=e4$pg=...`) which **must** be replaced before going live. Generate a new key with:
+  Django's cryptographic signing key. Used to sign cookies, CSRF tokens, session data, and password-reset links. The repository contains the following hard-coded development placeholder, which **must** be replaced before going live:
+
+  ```text
+  django-insecure-@hc_xr=e4$pg=)=)va7v6=2gdd%q5i#@i8wgay_9hig@_-n$wb
+  ```
+
+  Generate a secure replacement with:
 
   ```bash
   python -c "import secrets; print(secrets.token_urlsafe(50))"
   ```
 
-  Set the result as the `SECRET_KEY` environment variable. Never commit a real key to version control.
+  Never commit a real secret key to version control.
 </ParamField>
 
-<ParamField path="DEBUG" type="string ('True' / 'False')" default="True">
-  Controls Django's debug mode. When `True`, Django renders detailed error pages with full stack traces and local variable values — invaluable during development but a significant information leak in production. Set the `DEBUG` environment variable to the string `'False'` in all non-development environments. The override pattern in the section above converts the string to a Python boolean with `== 'True'`.
+<ParamField path="DEBUG" type="boolean" default="True">
+  Controls Django's debug mode. When `True`, Django renders detailed error pages with full stack traces and local variable values — invaluable during development but a significant information leak in production. The repository default is `True`. This must be set to `False` in all non-development environments.
 </ParamField>
 
-<ParamField path="ALLOWED_HOSTS" type="comma-separated string" default="'*'">
-  A list of hostnames or IP addresses that Django will serve. The repository default `['*']` accepts requests from any host, which is convenient locally but disables Django's host-header validation in production. Set the `ALLOWED_HOSTS` environment variable to a comma-separated list of the actual domain(s) your application runs on, for example `yourdomain.com,www.yourdomain.com`. The override pattern splits on commas to produce the list Django expects.
+<ParamField path="ALLOWED_HOSTS" type="list" default="['*']">
+  A list of hostnames or IP addresses that Django will serve. The repository default `['*']` accepts requests from any host, which is convenient locally but disables Django's host-header validation in production. In production, set this to the exact domain(s) your application runs on, for example `['yourdomain.com', 'www.yourdomain.com']`.
 </ParamField>
 
 <ParamField path="DATABASES.ENGINE" type="string" default="django.db.backends.sqlite3">
@@ -75,7 +85,11 @@ The following settings are present in `mi_proyecto/settings.py`. Each entry desc
 </ParamField>
 
 <ParamField path="STATIC_ROOT" type="string" default="BASE_DIR / 'staticfiles'">
-  The absolute filesystem path that `python manage.py collectstatic` writes all static files into. Resolves to `staticfiles/` inside the project root. Nginx (or your PaaS) must be configured to serve files from this directory directly. This directory should not be committed to version control — add `staticfiles/` to `.gitignore`.
+  The absolute filesystem path that `python manage.py collectstatic` writes all static files into. Resolves to `staticfiles/` inside the project root. Nginx (or your PaaS) must be configured to serve files from this directory directly. Add `staticfiles/` to `.gitignore` so the collected files are not committed to version control.
+</ParamField>
+
+<ParamField path="DEFAULT_AUTO_FIELD" type="string" default="django.db.models.BigAutoField">
+  The default primary key field type used for models that do not explicitly define a primary key. Set to `BigAutoField`, which uses a 64-bit integer — the Django 3.2+ recommended default. This matches the repository setting and requires no change for production.
 </ParamField>
 
 ## Switching to PostgreSQL
@@ -86,7 +100,8 @@ The following settings are present in `mi_proyecto/settings.py`. Each entry desc
 
 Replace the `DATABASES` block in `settings.py` with the following configuration. Each value is read from the environment so the same `settings.py` can be used across all environments without modification.
 
-```python settings.py
+```python
+# settings.py
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -101,23 +116,23 @@ DATABASES = {
 
 The corresponding environment variables are:
 
-| Variable      | Description                                  | Default         |
-| ------------- | -------------------------------------------- | --------------- |
-| `DB_NAME`     | Name of the PostgreSQL database              | `gestor_tareas` |
-| `DB_USER`     | PostgreSQL role / username                   | `postgres`      |
-| `DB_PASSWORD` | Password for the PostgreSQL role             | _(empty)_       |
-| `DB_HOST`     | Hostname or IP of the PostgreSQL server      | `localhost`     |
-| `DB_PORT`     | TCP port the PostgreSQL server listens on    | `5432`          |
+| Variable      | Description                               | Default         |
+| ------------- | ----------------------------------------- | --------------- |
+| `DB_NAME`     | Name of the PostgreSQL database           | `gestor_tareas` |
+| `DB_USER`     | PostgreSQL role / username                | `postgres`      |
+| `DB_PASSWORD` | Password for the PostgreSQL role          | _(empty)_       |
+| `DB_HOST`     | Hostname or IP of the PostgreSQL server   | `localhost`     |
+| `DB_PORT`     | TCP port the PostgreSQL server listens on | `5432`          |
 
-You must also add the `psycopg2` adapter to `requirements.txt`:
+<Note>
+  `psycopg2-binary` is **not** currently listed in `requirements.txt`. To use PostgreSQL, you must add it as an optional dependency and reinstall:
 
-```text requirements.txt
-psycopg2-binary>=2.9
-```
+  ```text
+  psycopg2-binary>=2.9
+  ```
 
-After updating `requirements.txt`, reinstall dependencies and run migrations against the new database:
-
-```bash
-pip install -r requirements.txt
-python manage.py migrate
-```
+  ```bash
+  pip install -r requirements.txt
+  python manage.py migrate
+  ```
+</Note>

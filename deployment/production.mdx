@@ -1,7 +1,7 @@
 ---
-title: "Deploy Gestor de Tareas Django to Production"
+title: "Deploying Gestor de Tareas Django to Production Server"
 sidebarTitle: "Production"
-description: "Learn how to deploy Gestor de Tareas Django to a production server using Gunicorn as the WSGI server, Nginx as a reverse proxy, or Render as a PaaS."
+description: "Step-by-step guide to deploying Gestor de Tareas Django with Gunicorn, Nginx, and Render, including static file collection and settings hardening."
 ---
 
 Deploying Gestor de Tareas Django to production requires a few changes from the default development configuration. The project ships with [Gunicorn](https://gunicorn.org/) (`gunicorn>=21.0`) already listed in `requirements.txt`, so no extra installation step is needed beyond a standard `pip install -r requirements.txt`. You will also need to harden the Django settings — especially `DEBUG`, `SECRET_KEY`, and `ALLOWED_HOSTS` — before exposing the application to the internet. See the [Environment Variables and Settings Reference](/deployment/environment) page for a full settings breakdown.
@@ -51,7 +51,9 @@ The following steps walk through a full production deployment on a Linux server.
     export ALLOWED_HOSTS="yourdomain.com,www.yourdomain.com"
     ```
 
-    For persistent configuration, write these values to a `.env` file and load it with a tool like `python-dotenv`, or inject them through your server's environment management (systemd `EnvironmentFile`, Docker `--env-file`, etc.).
+    <Note>
+      The default `settings.py` does not read from environment variables. Before these exports take effect you must first apply the production overrides described in the [Environment Variables and Settings Reference](/deployment/environment). For persistent configuration, inject values through your server's environment management — for example a systemd `EnvironmentFile` or the environment variable panel of your PaaS provider.
+    </Note>
   </Step>
 
   <Step title="Collect static files">
@@ -82,7 +84,8 @@ The following steps walk through a full production deployment on a Linux server.
 
     For a long-running production process, manage Gunicorn with **systemd** or **Supervisor** rather than running it directly in the terminal.
 
-    ```ini systemd unit example (/etc/systemd/system/gestor-tareas.service)
+    ```ini
+    # /etc/systemd/system/gestor-tareas.service
     [Unit]
     Description=Gunicorn daemon for Gestor de Tareas Django
     After=network.target
@@ -90,7 +93,9 @@ The following steps walk through a full production deployment on a Linux server.
     [Service]
     User=www-data
     WorkingDirectory=/srv/gestor-tarea-django
-    EnvironmentFile=/srv/gestor-tarea-django/.env
+    Environment="SECRET_KEY=your-secure-random-secret-key"
+    Environment="DEBUG=False"
+    Environment="ALLOWED_HOSTS=yourdomain.com"
     ExecStart=/srv/gestor-tarea-django/venv/bin/gunicorn \
               mi_proyecto.wsgi:application \
               --bind 0.0.0.0:8000 \
@@ -105,7 +110,8 @@ The following steps walk through a full production deployment on a Linux server.
   <Step title="Configure Nginx as a reverse proxy">
     Nginx forwards incoming HTTP/HTTPS traffic to Gunicorn and serves static files directly from the `staticfiles/` directory collected in step 3, bypassing Django entirely for those requests.
 
-    ```nginx /etc/nginx/sites-available/gestor-tareas
+    ```nginx
+    # /etc/nginx/sites-available/gestor-tareas
     server {
         listen 80;
         server_name yourdomain.com www.yourdomain.com;
