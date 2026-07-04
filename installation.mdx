@@ -1,0 +1,101 @@
+---
+title: "Install Gestor de Tareas Django Locally"
+sidebarTitle: "Installation"
+description: "Step-by-step guide to cloning the repository, creating a virtual environment, installing dependencies, and running the Gestor de Tareas Django development server."
+---
+
+This page walks you through everything needed to get Gestor de Tareas Django running on your local machine — from cloning the repository to seeing the login page in your browser. The entire setup takes only a few minutes and requires no external database or cloud services, as the project ships with a SQLite database out of the box.
+
+<Note>
+  **Prerequisites** — make sure you have the following tools installed before you begin:
+  - **Python 3.10 or newer** — [python.org/downloads](https://www.python.org/downloads/)
+  - **pip** — bundled with Python 3.10+; verify with `pip --version`
+  - **Git** — [git-scm.com](https://git-scm.com/)
+</Note>
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the project from GitHub and move into the project directory:
+
+    ```bash
+    git clone https://github.com/LucPinheiro/gestor-tarea-django.git && cd gestor-tarea-django
+    ```
+  </Step>
+
+  <Step title="Create and activate a virtual environment">
+    A virtual environment keeps the project's Python dependencies isolated from your system installation.
+
+    <Tabs>
+      <Tab title="Linux / macOS">
+        ```bash
+        python -m venv venv
+        source venv/bin/activate
+        ```
+      </Tab>
+      <Tab title="Windows">
+        ```bash
+        python -m venv venv
+        venv\Scripts\activate
+        ```
+      </Tab>
+    </Tabs>
+
+    Once activated, your terminal prompt will be prefixed with `(venv)`.
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required Python packages from `requirements.txt`:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    The file pins the following key packages:
+
+    | Package | Minimum version | Purpose |
+    |--------------------------|-----------------|------------------------------------------------|
+    | `Django` | `>=5.0` | Core web framework |
+    | `pandas` | `>=2.0` | Data manipulation used for CSV processing |
+    | `openpyxl` | `>=3.1` | Excel/XLSX read-write support |
+    | `django-import-export` | `>=4.0` | Admin-level import and export integration |
+    | `gunicorn` | `>=21.0` | WSGI server for production deployment |
+  </Step>
+
+  <Step title="Apply database migrations">
+    Generate and apply all Django migrations to create the SQLite schema:
+
+    ```bash
+    python manage.py makemigrations && python manage.py migrate
+    ```
+
+    This creates `db.sqlite3` in the project root with all the tables the `tareas` app needs.
+  </Step>
+
+  <Step title="Create a superuser (optional but recommended)">
+    A superuser account gives you access to the Django admin panel at `/admin/`, where you can manage tasks and users directly.
+
+    ```bash
+    python manage.py createsuperuser
+    ```
+
+    You will be prompted for a username, email address, and password.
+  </Step>
+
+  <Step title="Start the development server">
+    Launch Django's built-in development server:
+
+    ```bash
+    python manage.py runserver
+    ```
+
+    The server starts on port `8000` by default and will reload automatically when you edit source files.
+  </Step>
+</Steps>
+
+<Info>
+  Once the server is running, open the following URLs in your browser:
+  - **Application login page:** [http://127.0.0.1:8000](http://127.0.0.1:8000)
+  - **Django admin panel:** [http://127.0.0.1:8000/admin](http://127.0.0.1:8000/admin)
+
+  Log in with the superuser credentials you created in step 5 to access both interfaces.
+</Info>

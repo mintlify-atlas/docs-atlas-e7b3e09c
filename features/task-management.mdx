@@ -1,0 +1,225 @@
+---
+title: "Task Management: Create, Edit, and Delete Tasks"
+sidebarTitle: "Task Management"
+description: "Manage the full CRUD lifecycle of a Tarea object — create, view, edit, delete, and bulk-delete tasks while updating status and priority at any point."
+---
+
+Gestor de Tareas Django organises work around a single core model called `Tarea`. Each task carries a title, description, workflow state, numeric priority, and an optional deadline. Every operation — from first creation to final deletion — flows through a consistent set of views and URLs, so you always know exactly where to go and what to expect.
+
+## Creating a Task
+
+Any user (authenticated or not) can open the task creation form at `/crear/`. On a successful `POST`, the new `Tarea` is saved and the browser is redirected to its detail page at `/detalle/<id>/`.
+
+<Steps>
+  <Step title="Navigate to the creation form">
+    Open your browser and go to:
+
+    ```
+    http://127.0.0.1:8000/crear/
+    ```
+
+    The form is also reachable by clicking the **Nuevo** button in the top toolbar from any page.
+  </Step>
+
+  <Step title="Fill in the task fields">
+    The form is backed by `TareaForm`, which exposes the following fields:
+
+    <ParamField path="titulo" type="string" required>
+      Short title for the task (maximum 100 characters). Maps to `Tarea.titulo`.
+    </ParamField>
+
+    <ParamField path="descripcion" type="string" required>
+      Full description of the work to be done. Maps to `Tarea.descripcion`.
+    </ParamField>
+
+    <ParamField path="estado" type="dropdown">
+      Current workflow state. Choose one of:
+
+      | Value | Meaning |
+      |---|---|
+      | `Borrador` | Draft — not yet ready for work (default) |
+      | `Pendiente` | Queued and waiting to be started |
+      | `En proceso` | Actively being worked on |
+      | `Completada` | Finished |
+    </ParamField>
+
+    <ParamField path="prioridad" type="dropdown">
+      Numeric priority level. Choose one of:
+
+      | Value | Label |
+      |---|---|
+      | `1` | Baja (Low) |
+      | `2` | Media (Medium) |
+      | `3` | Alta (High) |
+
+      Defaults to `1` (Baja).
+    </ParamField>
+
+    <ParamField path="fecha_limite" type="date">
+      Optional deadline. Use the native date picker or type a date in `YYYY-MM-DD` format. Leave blank if there is no fixed deadline.
+    </ParamField>
+  </Step>
+
+  <Step title="Submit and confirm">
+    Click the **☁ (save)** button. If the form is valid, the app saves the record and redirects you to `/detalle/<id>/` where you can immediately review the new task.
+  </Step>
+</Steps>
+
+---
+
+## Viewing Task Detail
+
+Every task has a dedicated detail page at `/detalle/<id>/`. This page shows all stored data, lets you move through the full task list without returning to the list view, and provides one-click controls for changing state and priority.
+
+```
+http://127.0.0.1:8000/detalle/42/
+```
+
+<Tabs>
+  <Tab title="Displayed information">
+    The detail view renders the following data from the `Tarea` model:
+
+    | Field | Description |
+    |---|---|
+    | `titulo` | Task title displayed as a heading |
+    | `descripcion` | Full description text |
+    | `estado` | Current state shown as a colour-coded badge |
+    | `prioridad` | Priority shown as one, two, or three filled stars (★) |
+    | `fecha_limite` | Deadline badge (only shown when a date is set) |
+    | `fecha_creada` | Creation timestamp shown below the title |
+
+    A position counter in the top-right corner shows where this task sits in the ordered list — for example **3 / 24** means task number 3 out of 24 total.
+  </Tab>
+
+  <Tab title="Navigation">
+    The detail view includes **Previous (‹)** and **Next (›)** buttons that move through all tasks sorted by `estado` then `id`. The underlying query is:
+
+    ```python
+    Tarea.objects.all().order_by('estado', 'id')
+    ```
+
+    When you are on the first task the **‹** button is disabled; when you are on the last task the **›** button is disabled.
+  </Tab>
+
+  <Tab title="Quick status change">
+    A segmented button bar below the task metadata lets you change the state with a single click without opening the edit form. Clicking a state button sends a `GET` request to:
+
+    ```
+    /cambiar-estado/<id>/<estado>/
+    ```
+
+    For example, to mark task 42 as completed:
+
+    ```
+    http://127.0.0.1:8000/cambiar-estado/42/Completada/
+    ```
+
+    Valid `<estado>` values: `Borrador`, `Pendiente`, `En proceso`, `Completada`.
+
+    After the change, Django displays a success message and the page reloads to reflect the updated badge.
+  </Tab>
+
+  <Tab title="Quick priority change">
+    The three stars (★ / ☆) in the detail header are clickable links. Each star corresponds to a priority level and calls:
+
+    ```
+    /tareas/<id>/prioridad/<prioridad>/
+    ```
+
+    For example, clicking the third star on task 42 sets its priority to **Alta**:
+
+    ```
+    http://127.0.0.1:8000/tareas/42/prioridad/3/
+    ```
+
+    Valid `<prioridad>` values: `1` (Baja), `2` (Media), `3` (Alta).
+  </Tab>
+</Tabs>
+
+---
+
+## Editing a Task
+
+The edit view reuses the same `TareaForm` and the same `detalle.html` template as the create flow, but loads an existing `Tarea` instance so all fields are pre-populated.
+
+```
+http://127.0.0.1:8000/editar/42/
+```
+
+<Steps>
+  <Step title="Open the edit form">
+    Navigate to `/editar/<id>/` directly, or click the **✎ (edit)** button in the task detail toolbar. A `GET` request renders the form with the current field values already filled in.
+  </Step>
+
+  <Step title="Make your changes">
+    All five editable fields — `titulo`, `descripcion`, `estado`, `prioridad`, and `fecha_limite` — are available and work exactly as they do on the creation form.
+  </Step>
+
+  <Step title="Save">
+    Click **☁ (save)** to submit the form via `POST`. On success:
+
+    - Django saves the updated record.
+    - A green **"Tarea actualizada correctamente."** success message is displayed at the top of the page.
+    - The browser redirects to `/detalle/<id>/`.
+
+    If any validation errors exist, the form re-renders with inline error messages and no data is saved.
+  </Step>
+</Steps>
+
+---
+
+## Deleting a Task
+
+The application supports both single-task deletion with a confirmation step and bulk deletion of multiple tasks selected from the list view.
+
+### Single deletion
+
+<Steps>
+  <Step title="Open the confirmation page">
+    Send a `GET` request to `/eliminar/<id>/` — for example, by clicking the **🗑 (trash)** icon in the task detail toolbar:
+
+    ```
+    http://127.0.0.1:8000/eliminar/42/
+    ```
+
+    The `confirmar_eliminar.html` template displays the task title and asks you to confirm.
+  </Step>
+
+  <Step title="Confirm deletion">
+    Click **Confirmar** to send a `POST` to the same URL. The `Tarea` record is deleted from the database, a success message is shown, and you are redirected to the list view in list mode:
+
+    ```
+    /tareas/?vista=lista
+    ```
+
+    Click **Cancelar** to return to `/detalle/<id>/` without making any changes.
+  </Step>
+</Steps>
+
+### Bulk deletion
+
+<Steps>
+  <Step title="Switch to list view">
+    Navigate to `/tareas/?vista=lista` to see the tabular task list with checkboxes.
+  </Step>
+
+  <Step title="Select tasks">
+    Tick the checkbox next to each task you want to delete. Use the **Select All** checkbox in the table header to select every task on the current page at once.
+  </Step>
+
+  <Step title="Delete selected">
+    Open the **⚙ Acciones** dropdown and click **🗑 Eliminar**. A confirmation modal appears. Click **Eliminar** in the modal to confirm.
+
+    The form submits via `POST` to `/eliminar-seleccionadas/` with the selected IDs as `tareas_seleccionadas` values. All matching records are deleted in a single database query:
+
+    ```python
+    Tarea.objects.filter(id__in=ids).delete()
+    ```
+
+    A success message confirms how many tasks were removed.
+  </Step>
+</Steps>
+
+<Tip>
+  To quickly remove a large batch of tasks, use the list view checkboxes and the **⚙ Acciones → 🗑 Eliminar** flow. If no checkboxes are ticked when you click Eliminar, a yellow **"No hay tareas seleccionadas"** warning appears automatically and no deletion occurs.
+</Tip>

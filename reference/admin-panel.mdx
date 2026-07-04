@@ -1,0 +1,99 @@
+---
+title: "Django Admin Panel Configuration and Usage"
+sidebarTitle: "Admin Panel"
+description: "How to access and use the Django admin panel in Gestor de Tareas Django: superuser setup, registered models, and user management."
+---
+
+Gestor de Tareas Django ships with Django's built-in administration interface enabled out of the box. The admin panel is mounted at `/admin/` and gives authenticated staff users a full create, read, update, and delete interface for any registered model — in this project, the `Tarea` model. No additional packages are required; everything is provided by `django.contrib.admin`, which is listed in `INSTALLED_APPS` in `mi_proyecto/settings.py`.
+
+## Accessing the Admin Panel
+
+The admin panel is available at the following URL once the development server is running:
+
+```
+http://127.0.0.1:8000/admin/
+```
+
+Log in with the credentials of a **superuser** account. If no superuser exists yet, create one with the management command shown in the [Creating a Superuser](#creating-a-superuser) section below. The admin login screen is separate from the application's own login page (`/`) and uses Django's internal session and authentication backend.
+
+<Info>
+  The admin panel is available in development with `DEBUG = True` (the default setting in `mi_proyecto/settings.py`). In production, set `DEBUG = False` and restrict access to `/admin/` at the web server or firewall level to prevent exposure to the public internet.
+</Info>
+
+## Registered Models
+
+The `tareas/admin.py` file registers a single model with the default `ModelAdmin`:
+
+```python admin.py
+from django.contrib import admin
+from .models import Tarea
+
+admin.site.register(Tarea)
+```
+
+Because `admin.site.register(Tarea)` is called without a custom `ModelAdmin` class, Django uses all default behaviours. From the admin you can:
+
+<CardGroup cols={2}>
+  <Card title="List Tasks" icon="list">
+    Browse all rows in the `tareas_tarea` table. The default changelist displays the string representation of each `Tarea` object (its `titulo`, as defined by `__str__`).
+  </Card>
+  <Card title="Create Tasks" icon="plus">
+    Add new tasks via a generated form covering all editable fields: `titulo`, `descripcion`, `estado`, `prioridad`, and `fecha_limite`.
+  </Card>
+  <Card title="Edit Tasks" icon="pencil">
+    Update any field on an existing task using the auto-generated change form.
+  </Card>
+  <Card title="Delete Tasks" icon="trash">
+    Delete individual tasks or use the built-in bulk-delete action from the changelist.
+  </Card>
+</CardGroup>
+
+<Note>
+  The `Tarea` model is registered with the **default** `ModelAdmin`. No custom `list_display`, `search_fields`, `list_filter`, or `ordering` options are configured. To improve the admin experience — for example, to add column headers, a search bar, or state filters — add a custom `ModelAdmin` subclass to `tareas/admin.py`:
+
+  ```python admin.py
+  from django.contrib import admin
+  from .models import Tarea
+
+  @admin.register(Tarea)
+  class TareaAdmin(admin.ModelAdmin):
+      list_display = ('titulo', 'estado', 'prioridad', 'fecha_limite', 'fecha_creada')
+      list_filter = ('estado', 'prioridad')
+      search_fields = ('titulo', 'descripcion')
+  ```
+</Note>
+
+## Creating a Superuser
+
+A superuser has full access to the admin panel and all registered models. Create one using Django's `createsuperuser` management command from the project root (where `manage.py` is located):
+
+```bash
+python manage.py createsuperuser
+```
+
+Django will interactively prompt for:
+
+| Prompt | Required | Notes |
+|--------|----------|-------|
+| **Username** | Yes | Must be unique |
+| **Email address** | No | Can be left blank |
+| **Password** | Yes | Must pass the four validators configured in `AUTH_PASSWORD_VALIDATORS` |
+| **Password (again)** | Yes | Confirmation field |
+
+Once created, log in at `http://127.0.0.1:8000/admin/` with those credentials.
+
+## Creating Additional Users
+
+Regular (non-superuser) users can be created directly inside the admin panel — no command-line access is needed.
+
+1. Log in to the admin as a superuser.
+2. Navigate to **Authentication and Authorization → Users**.
+3. Click **Add user** in the top-right corner.
+4. Enter a **username** and **password**, then click **Save**.
+5. On the following screen you can optionally fill in personal details and assign permissions or group memberships.
+
+<Tip>
+  Regular users created through the admin panel use the same Django authentication backend (`django.contrib.auth`) that the application's login page (`/`) relies on. Once created, those users can immediately log in to the application at `http://127.0.0.1:8000/`.
+</Tip>
+
+After a successful login the application redirects the user to `LOGIN_REDIRECT_URL`, which is set to `/tareas/` in `mi_proyecto/settings.py`.

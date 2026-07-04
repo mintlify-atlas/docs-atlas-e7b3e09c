@@ -1,0 +1,93 @@
+---
+title: "Gestor de Tareas Django: Task Management Overview"
+sidebarTitle: "Introduction"
+description: "An overview of Gestor de Tareas Django — a full-featured task management web app built with Django 5, Bootstrap 5, and SQLite, covering its core concepts and project layout."
+---
+
+Gestor de Tareas Django is a web application designed to help individuals and teams organize, track, and manage their tasks through a clean, modern interface. Built on **Django 5** with a **SQLite** database and a responsive **Bootstrap 5** front end, it follows Django's MVT (Model–View–Template) architecture and provides a complete CRUD workflow alongside CSV import/export, authentication, and two distinct task views — Kanban and List.
+
+## Task States
+
+Every task moves through one of four states that drive the Kanban board columns and list filtering:
+
+| State | Description |
+|------------|----------------------------------------------|
+| **Borrador** | Draft — task created but not yet active |
+| **Pendiente** | Pending — task queued and ready to start |
+| **En proceso** | In progress — task is actively being worked on |
+| **Completada** | Completed — task has been finished |
+
+States can be changed individually from the task detail view or in bulk from the List view using the quick-change controls.
+
+## Priority System
+
+Each task carries a numeric priority that controls visual indicators (star ratings) and sort order:
+
+| Value | Label | Meaning |
+|-------|-----------|-------------------------------|
+| `1` | **Baja** | Low priority |
+| `2` | **Media** | Medium priority |
+| `3` | **Alta** | High priority |
+
+Priority can be updated at any time directly from both the Kanban and List views without opening the full edit form.
+
+## Where to Go Next
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="wrench" href="/installation">
+    Clone the repo, set up a virtual environment, and run the development server locally.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Understand every key setting in `mi_proyecto/settings.py` and prepare for production.
+  </Card>
+  <Card title="Task Management" icon="list-check" href="/features/task-management">
+    Create, edit, delete, and bulk-manage tasks using CRUD operations and CSV import/export.
+  </Card>
+  <Card title="Views" icon="table-columns" href="/features/views">
+    Explore the Kanban board and List view, and learn how to switch between them.
+  </Card>
+</CardGroup>
+
+## Project Structure
+
+The repository is organized around a single Django project package (`mi_proyecto`) and a single application (`tareas`). The key directories are:
+
+```
+gestor-tarea-django/
+│
+├── mi_proyecto/          # Django project package — settings, root URLs, WSGI/ASGI
+│   ├── settings.py
+│   ├── urls.py
+│   ├── wsgi.py
+│   └── asgi.py
+│
+├── tareas/               # Core Django app — models, views, forms, app URLs
+│   ├── models.py
+│   ├── views.py
+│   ├── forms.py
+│   ├── admin.py
+│   ├── urls.py
+│   │
+│   ├── templates/        # HTML templates for every page
+│   │   └── tareas/
+│   │       ├── base.html
+│   │       ├── lista.html
+│   │       ├── detalle.html
+│   │       ├── formulario.html
+│   │       ├── confirmar_eliminar.html
+│   │       ├── importar_csv.html
+│   │       └── login.html
+│   │
+│   └── static/           # App-scoped static assets
+│       └── tareas/
+│           └── style.css
+│
+├── manage.py             # Django management entry point
+├── requirements.txt      # Python dependencies
+└── db.sqlite3            # SQLite database (created after migrations)
+```
+
+- **`mi_proyecto/`** — contains the project-level configuration and the root URL dispatcher.
+- **`tareas/`** — the self-contained app that owns the `Tarea` model, all views, and every form.
+- **`tareas/templates/`** — all rendered HTML lives here, extending `base.html` for consistent layout.
+- **`tareas/static/`** — holds `style.css`, the custom stylesheet layered on top of Bootstrap 5.

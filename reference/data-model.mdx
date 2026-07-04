@@ -1,0 +1,161 @@
+---
+title: "Tarea Data Model: Fields, Choices, and Constraints"
+sidebarTitle: "Data Model"
+description: "Complete reference for the Tarea Django model: every field, its type, constraints, valid choice values, and the ModelForm that wraps it."
+---
+
+The `Tarea` model is the single database table that powers Gestor de Tareas Django. Every task created, edited, filtered, or exported by the application is stored as a row in this table. Understanding its fields, choice constants, and constraints is the starting point for any backend work on this project.
+
+## Model Definition
+
+The full class is defined in `tareas/models.py`. Two module-level lists — `ESTADOS` and `PRIORIDADES` — supply the allowed values for the `estado` and `prioridad` fields respectively.
+
+```python models.py
+from django.db import models
+
+ESTADOS = [
+    ('Borrador', 'Borrador'),
+    ('Pendiente', 'Pendiente'),
+    ('En proceso', 'En proceso'),
+    ('Completada', 'Completada'),
+]
+
+PRIORIDADES = [
+    (1, 'Baja'),
+    (2, 'Media'),
+    (3, 'Alta'),
+]
+
+class Tarea(models.Model):
+    titulo = models.CharField(max_length=100)
+    descripcion = models.TextField()
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='Borrador')
+    fecha_creada = models.DateTimeField(auto_now_add=True)
+    prioridad = models.IntegerField(choices=PRIORIDADES, default=1)
+    fecha_limite = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return self.titulo
+```
+
+## Field Reference
+
+Each field listed below corresponds directly to a column in the `tareas_tarea` database table. Fields marked **required** must be provided on create/update; fields marked **optional** may be omitted or left blank.
+
+<ResponseField name="titulo" type="CharField" required>
+  The title of the task. Stored as a `VARCHAR(100)` column. Maximum length of **100 characters**; no default value — must be supplied by the caller or the form.
+</ResponseField>
+
+<ResponseField name="descripcion" type="TextField" required>
+  A free-form text body for the task. Stored as a `TEXT` column with no length limit. No default value — must be supplied.
+</ResponseField>
+
+<ResponseField name="estado" type="CharField" required>
+  The current workflow state of the task. Stored as a `VARCHAR(20)`. Constrained to the four values defined in `ESTADOS` (see table below). Defaults to `'Borrador'` when not provided.
+</ResponseField>
+
+<ResponseField name="fecha_creada" type="DateTimeField" required>
+  The timestamp at which the task was created. Set automatically by Django via `auto_now_add=True` — it is written once on `INSERT` and never updated. This field is **not editable** through forms or the API; any value passed in is silently ignored by Django.
+</ResponseField>
+
+<ResponseField name="prioridad" type="IntegerField" required>
+  The numeric priority of the task. Constrained to the three integer values defined in `PRIORIDADES` (see table below). Defaults to `1` (`'Baja'`) when not provided.
+</ResponseField>
+
+<ResponseField name="fecha_limite" type="DateField" optional>
+  An optional deadline date for the task. Stored as a `DATE` column. Both `null=True` and `blank=True` are set, meaning the column accepts `NULL` in the database and the field may be omitted from forms without a validation error.
+</ResponseField>
+
+## Valid Values
+
+### ESTADOS — Task States
+
+The `estado` field accepts only these four string values. The stored value (written to the database) and the display label are identical for all states.
+
+| Stored Value | Display Label |
+|---|---|
+| `Borrador` | Borrador |
+| `Pendiente` | Pendiente |
+| `En proceso` | En proceso |
+| `Completada` | Completada |
+
+<Tip>
+  The `cambiar_estado_simple` view accepts the stored string value as a URL path segment — e.g. `/cambiar-estado/7/En proceso/`. Ensure the value is URL-encoded when constructing links manually.
+</Tip>
+
+### PRIORIDADES — Task Priorities
+
+The `prioridad` field accepts only these three integer values. The integer is stored in the database; the label is used for display in templates and the admin.
+
+| Stored Value (integer) | Display Label |
+|---|---|
+| `1` | Baja |
+| `2` | Media |
+| `3` | Alta |
+
+## ModelForm — TareaForm
+
+`TareaForm` is a `ModelForm` defined in `tareas/forms.py`. It is used by both the `crear_tarea` and `editar_tarea` views to validate and persist task data. The form exposes five of the six model fields; `fecha_creada` is intentionally excluded because Django sets it automatically via `auto_now_add=True`.
+
+```python forms.py
+from django import forms
+from .models import Tarea
+
+class TareaForm(forms.ModelForm):
+
+    class Meta:
+        model = Tarea
+
+        fields = [
+            'titulo',
+            'descripcion',
+            'estado',
+            'prioridad',
+            'fecha_limite'
+        ]
+
+        widgets = {
+            'titulo': forms.TextInput(attrs={
+                'class': 'form-control form-control-lg',
+                'placeholder': 'Título de tarea...'
+            }),
+
+            'descripcion': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Añada detalles sobre esta tarea...',
+                'rows': 10
+            }),
+
+            'estado': forms.Select(attrs={
+                'class': 'form-select form-select-lg'
+            }),
+
+            'prioridad': forms.Select(attrs={
+                'class': 'form-select form-select-lg'
+            }),
+
+            'fecha_limite': forms.DateInput(attrs={
+                'class': 'form-control form-control-lg',
+                'type': 'date'
+            }),
+        }
+```
+
+Each widget applies Bootstrap 5 classes (`form-control`, `form-select`) and, where appropriate, an HTML `placeholder`. The `fecha_limite` widget sets `type="date"` to trigger the browser's native date-picker.
+
+<Note>
+  `fecha_creada` is **not** included in `TareaForm.Meta.fields`. Attempting to pass it in POST data has no effect — Django's `ModelForm` will ignore fields not declared in `fields`.
+</Note>
+
+## Database
+
+The table is managed entirely by Django migrations. Key storage details are listed below.
+
+| Property | Value |
+|---|---|
+| **Backend** | SQLite (`django.db.backends.sqlite3`) — configured in `mi_proyecto/settings.py` |
+| **Database file** | `BASE_DIR / 'db.sqlite3'` (project root) |
+| **Table name** | `tareas_tarea` — Django convention: `<app_label>_<model_name>` |
+| **Primary key** | `id` — auto-incrementing `BigAutoField`, sourced from `DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'` in settings |
+
+The `prioridad` and `fecha_limite` fields were added in migration `0005_tarea_fecha_limite_tarea_prioridad` (`tareas/migrations/0005_tarea_fecha_limite_tarea_prioridad.py`). If you are working with an older database snapshot, run `python manage.py migrate` to apply all pending migrations before testing these fields.

@@ -1,0 +1,145 @@
+---
+title: "Kanban and List Views for Task Organization"
+sidebarTitle: "Views"
+description: "Switch between Kanban and list views at /tareas/, filter by status, search by title, and paginate through results — all with simple query parameters."
+---
+
+The main task hub lives at `/tareas/` and offers two distinct ways to visualise your work. The **Kanban view** arranges tasks in status columns so you can see workflow progress at a glance, while the **list view** gives you a compact table with checkboxes for bulk actions, CSV export, and pagination. Both views share the same search and filter controls, and you can switch between them at any time without losing your current filter state.
+
+## Switching Views
+
+The `vista` query parameter tells the server which layout to render. There is no user-preference cookie — the choice is made explicitly through the URL on every request.
+
+| `vista` value | Layout rendered | URL example |
+|---|---|---|
+| `kanban` | Kanban board with four columns (default) | `http://127.0.0.1:8000/tareas/?vista=kanban` |
+| `lista` | Paginated table with checkboxes | `http://127.0.0.1:8000/tareas/?vista=lista` |
+
+When `vista` is absent from the URL the server defaults to `kanban`. The two toggle buttons in the top-right corner of the toolbar (`▦` for Kanban, `☰` for List) append the appropriate `?vista=` parameter when clicked.
+
+---
+
+## Kanban View
+
+The Kanban board is the default layout. It divides all tasks into four fixed columns, one for each possible `estado` value, so you can track where work stands across your whole project at a glance.
+
+<CardGroup cols={4}>
+  <Card title="Borrador" icon="file">
+    Tasks that are drafted but not yet ready to be worked on. Corresponds to `estado = 'Borrador'`.
+  </Card>
+  <Card title="Pendiente" icon="clock">
+    Tasks that are queued and waiting to start. Corresponds to `estado = 'Pendiente'`.
+  </Card>
+  <Card title="En proceso" icon="bolt">
+    Tasks that are actively being worked on. Corresponds to `estado = 'En proceso'`.
+  </Card>
+  <Card title="Completada" icon="check">
+    Tasks that have been finished. Corresponds to `estado = 'Completada'`.
+  </Card>
+</CardGroup>
+
+Each card inside a column displays:
+
+- **Task title** — the `titulo` field.
+- **Priority stars** — one to three stars (★) reflecting the `prioridad` value (`1` = ★☆☆, `2` = ★★☆, `3` = ★★★).
+
+Clicking any card navigates to the full detail page at `/detalle/<id>/`, preserving the `?vista=kanban` context parameter so the back-navigation returns you to the Kanban board.
+
+<Info>
+  The Kanban columns are populated server-side from four separate querysets (`tareas_borrador`, `tareas_pendientes`, `tareas_proceso`, `tareas_completadas`). Active search and status filters apply to the paginated list context but **not** to the Kanban column data — the columns always show all matching tasks rather than a paged subset. Switch to the list view when you need pagination alongside filtering.
+</Info>
+
+---
+
+## List View
+
+The list view renders a paginated table with one task per row. It is optimised for scanning large datasets and performing bulk operations.
+
+```
+http://127.0.0.1:8000/tareas/?vista=lista
+```
+
+### Table columns
+
+| Column | Source field | Notes |
+|---|---|---|
+| Checkbox | — | Select individual tasks for bulk actions |
+| Título | `tarea.titulo` | Clickable; opens `/detalle/<id>/` |
+| Descripción | `tarea.descripcion` | Truncated to 80 characters |
+| Fecha | `tarea.fecha_creada` | Formatted as `dd/mm/YYYY` |
+| Estado | `tarea.estado` | Colour-coded badge |
+
+### Bulk actions
+
+Select one or more tasks using the row checkboxes, then open the **⚙ Acciones** dropdown:
+
+- **🗑 Eliminar** — opens a confirmation modal and then `POST`s selected IDs to `/eliminar-seleccionadas/`.
+- **⬆ Exportar CSV** — submits the same selection form to `/exportar/`, triggering a file download of `tareas.csv` containing only the selected rows.
+
+To select every visible task at once, tick the **Select All** checkbox in the table header (`<input type="checkbox" id="checkTodos">`).
+
+### Pagination
+
+The list view displays **10 tasks per page**, controlled by the Django `Paginator` class. Navigate between pages with the `?page=N` query parameter or by clicking the **‹** and **›** buttons in the toolbar.
+
+```
+http://127.0.0.1:8000/tareas/?vista=lista&page=2
+```
+
+The position counter next to the pagination buttons (e.g. **11 / 45**) shows the index of the first task on the current page relative to the total filtered count.
+
+---
+
+## Search and Filter
+
+The toolbar exposes a search box and a status dropdown. Both controls submit via `GET`, adding their values as query parameters so filtered URLs are bookmarkable and shareable.
+
+### Available query parameters
+
+| Parameter | Type | Effect |
+|---|---|---|
+| `vista` | `kanban` \| `lista` | Selects the view layout |
+| `estado` | string | Filters tasks to a single workflow state |
+| `buscar` | string | Case-insensitive title search (`icontains`) |
+| `page` | integer | Selects a page in the list view |
+
+### Filter by status (`estado`)
+
+Pass one of the four valid state values to show only tasks in that state:
+
+```
+http://127.0.0.1:8000/tareas/?estado=Pendiente
+http://127.0.0.1:8000/tareas/?estado=Borrador
+http://127.0.0.1:8000/tareas/?estado=En proceso
+http://127.0.0.1:8000/tareas/?estado=Completada
+```
+
+Omit the `estado` parameter (or select **Todos** in the dropdown) to show all states.
+
+### Search by title (`buscar`)
+
+The `buscar` parameter performs a case-insensitive substring match against `Tarea.titulo`:
+
+```
+http://127.0.0.1:8000/tareas/?buscar=informe
+```
+
+This is equivalent to the ORM filter:
+
+```python
+Tarea.objects.filter(titulo__icontains='informe')
+```
+
+### Combining parameters
+
+All query parameters can be combined freely. For example, to find tasks with "informe" in the title that are currently **Pendiente**, and to view them in list layout on page 1:
+
+```
+http://127.0.0.1:8000/tareas/?vista=lista&estado=Pendiente&buscar=informe&page=1
+```
+
+The server applies filters in order — first `estado`, then `buscar` — before sorting results by `estado` then `id` and handing them to the paginator.
+
+<Tip>
+  Combine `?vista=lista` with `?estado=Completada` to quickly audit your finished tasks and export them to CSV in one action. Select all rows on the page and use **⬆ Exportar CSV** from the Acciones menu.
+</Tip>

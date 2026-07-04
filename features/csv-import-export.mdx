@@ -1,0 +1,173 @@
+---
+title: "Bulk Import and Export Tasks with CSV Files"
+sidebarTitle: "CSV Import/Export"
+description: "Upload a CSV file to bulk-create tasks in one step, or download your task list as a CSV from the list view or the individual task detail page."
+---
+
+Gestor de Tareas Django includes a CSV import/export feature designed for situations where you need to load a large set of tasks at once or share your task list with an external tool. You can import tasks by uploading a `.csv` file at `/importar/`, and you can export tasks as a downloadable `tareas.csv` file from either the list view or an individual task detail page — with no third-party libraries required.
+
+## CSV Format
+
+The importer and exporter both use the same column layout. Your CSV file must include a header row with these column names in any order:
+
+| Column | Type | Required on import | Notes |
+|---|---|---|---|
+| `id` | integer | No | If provided and the ID already exists in the database, the row is skipped |
+| `titulo` | string | Yes | Task title, max 100 characters |
+| `descripcion` | string | Yes | Full task description |
+| `estado` | string | No | Defaults to `Borrador` if blank or missing |
+| `prioridad` | integer | No | Defaults to `1` (Baja) if blank or missing |
+| `fecha_limite` | date | No | Format: `YYYY-MM-DD`; leave blank for no deadline |
+| `fecha_creada` | datetime | No | Ignored on import; always set automatically by the database |
+
+### Valid field values
+
+<Tabs>
+  <Tab title="estado">
+    | Value | Meaning |
+    |---|---|
+    | `Borrador` | Draft (default) |
+    | `Pendiente` | Pending |
+    | `En proceso` | In progress |
+    | `Completada` | Completed |
+  </Tab>
+  <Tab title="prioridad">
+    | Value | Label |
+    |---|---|
+    | `1` | Baja (Low) |
+    | `2` | Media (Medium) |
+    | `3` | Alta (High) |
+  </Tab>
+  <Tab title="fecha_limite">
+    Use ISO 8601 date format: `YYYY-MM-DD`. For example: `2027-03-31`. Leave the cell empty if the task has no deadline.
+  </Tab>
+</Tabs>
+
+### Sample CSV
+
+The following sample matches the column format expected by the importer. You can use this as a starting template:
+
+```csv
+id,titulo,descripcion,estado,prioridad,fecha_limite,fecha_creada
+1,Preparar Informe Mensual,Crear informe mensual de ventas y métricas,Pendiente,2,2026-10-01,2026-09-20
+2,Actualizar Documentación,Revisar y actualizar documentación técnica,En proceso,1,2026-10-03,2026-09-21
+3,Corregir Bug Login,Resolver error en autenticación de usuarios,Pendiente,3,2026-10-05,2026-09-22
+4,Deploy Producción,Desplegar nueva versión en producción,Completada,3,2026-10-07,2026-09-23
+5,Backup Servidor,Realizar copia de seguridad completa,Completada,2,2026-10-10,2026-09-24
+6,Reunión Cliente,Presentar avances del proyecto,Pendiente,2,2026-10-12,2026-09-25
+7,Optimizar Consultas SQL,Mejorar rendimiento de base de datos,En proceso,3,2026-10-15,2026-09-26
+8,Diseñar Dashboard,Crear interfaz de métricas,Borrador,1,2026-10-18,2026-09-27
+```
+
+<Note>
+  The `id` column is optional when importing. When the `id` column is present and a `Tarea` with that ID already exists, the row is silently skipped — the existing record is not updated. To force a re-import, remove the `id` column or delete the conflicting tasks first.
+</Note>
+
+---
+
+## Importing Tasks
+
+The import form is available at `/importar/` and requires the user to be logged in.
+
+```
+http://127.0.0.1:8000/importar/
+```
+
+<Steps>
+  <Step title="Navigate to the import page">
+    Click the **⚙** gear menu in the top toolbar (available from both the list and detail views) and select **⬇ Importar registros**, or navigate directly to `/importar/`.
+  </Step>
+
+  <Step title="Select your CSV file">
+    Click **Selecciona un archivo CSV** and choose a `.csv` file from your local machine. The file field maps to the `archivo_csv` input in the `multipart/form-data` form.
+  </Step>
+
+  <Step title="Submit the form">
+    Click **Importar**. The server reads the uploaded file, decodes it, and processes each row.
+  </Step>
+
+  <Step title="Review the result messages">
+    After processing, the app redirects to the list view and displays summary messages using Django's messages framework:
+
+    | Outcome | Message shown |
+    |---|---|
+    | Tasks imported successfully | `Se importaron correctamente N tareas.` |
+    | All rows already existed | `No se importaron tareas nuevas porque ya existen en el sistema.` |
+
+    Rows that raised an exception during `Tarea.objects.create()` are counted as errors and silently skipped. Check that your `estado` and `prioridad` values are valid if you see fewer imports than expected.
+  </Step>
+</Steps>
+
+### How the importer processes each row
+
+The `importar_csv` view applies this logic for every row in the file:
+
+```python
+id_csv = fila.get('id')
+
+if id_csv and Tarea.objects.filter(id=id_csv).exists():
+    omitidas += 1
+    continue
+
+Tarea.objects.create(
+    titulo=fila.get('titulo', '').strip(),
+    descripcion=fila.get('descripcion', '').strip(),
+    estado=fila.get('estado') or 'Borrador',
+    prioridad=int(fila.get('prioridad') or 1),
+    fecha_limite=fila.get('fecha_limite') or None
+)
+```
+
+Fields not present in the CSV (`fecha_creada`) are set automatically by the database.
+
+<Warning>
+  Your CSV file must be encoded in **UTF-8** or **Latin-1 (ISO-8859-1)**. The importer first tries `utf-8-sig` (UTF-8 with BOM) and falls back to `latin-1` automatically if decoding fails. Files saved with other encodings (e.g., UTF-16) will raise a `UnicodeDecodeError` and no tasks will be imported.
+</Warning>
+
+---
+
+## Exporting Tasks
+
+The export endpoint at `/exportar/` returns a file download response with `Content-Disposition: attachment; filename="tareas.csv"`. It supports three modes depending on how it is called.
+
+### Export selected tasks from the list view
+
+In the list view (`/tareas/?vista=lista`), tick the checkboxes next to the tasks you want to export, then open the **⚙** gear menu and click **⬆ Exportar CSV**. The form `POST`s to `/exportar/` with the selected IDs as `tareas_seleccionadas` values.
+
+```
+POST /exportar/
+Content-Type: application/x-www-form-urlencoded
+
+tareas_seleccionadas=5&tareas_seleccionadas=12&tareas_seleccionadas=17
+```
+
+If no checkboxes are selected, **all tasks** in the database are exported, ordered by `estado`.
+
+### Export all tasks (no selection)
+
+Trigger an export with no selected IDs to download the complete task list:
+
+```
+POST /exportar/
+Content-Type: application/x-www-form-urlencoded
+
+(empty body — no tareas_seleccionadas values)
+```
+
+### Export a single task from the detail view
+
+From a task detail page, open the **⚙** gear menu and click **↥ Exportar CSV**. This sends a `GET` request with the task ID as a query parameter:
+
+```
+GET /exportar/?tarea_id=42
+```
+
+### Export column order
+
+Regardless of the export mode, every exported file uses this fixed column order:
+
+```csv
+id,titulo,descripcion,estado,prioridad,fecha_limite,fecha_creada
+```
+
+The `fecha_creada` column contains only the date portion (no time component) in `YYYY-MM-DD` format, produced by calling `.date()` on the `DateTimeField` value.

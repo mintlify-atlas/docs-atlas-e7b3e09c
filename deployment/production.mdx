@@ -1,0 +1,199 @@
+---
+title: "Deploy Gestor de Tareas Django to Production"
+sidebarTitle: "Production"
+description: "Learn how to deploy Gestor de Tareas Django to a production server using Gunicorn as the WSGI server, Nginx as a reverse proxy, or Render as a PaaS."
+---
+
+Deploying Gestor de Tareas Django to production requires a few changes from the default development configuration. The project ships with [Gunicorn](https://gunicorn.org/) (`gunicorn>=21.0`) already listed in `requirements.txt`, so no extra installation step is needed beyond a standard `pip install -r requirements.txt`. You will also need to harden the Django settings — especially `DEBUG`, `SECRET_KEY`, and `ALLOWED_HOSTS` — before exposing the application to the internet. See the [Environment Variables and Settings Reference](/deployment/environment) page for a full settings breakdown.
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Python & pip" icon="python">
+    Python 3.10 or newer and pip must be available on the target server. The project's `requirements.txt` targets Django 5.0+, which requires Python 3.10+.
+  </Card>
+  <Card title="Gunicorn" icon="server">
+    Gunicorn is already declared in `requirements.txt` (`gunicorn>=21.0`). It is installed automatically when you run `pip install -r requirements.txt`.
+  </Card>
+  <Card title="Linux server or PaaS" icon="cloud">
+    A Linux server (Ubuntu 22.04+ recommended) with SSH access, or a PaaS provider such as Render. The live demo runs on [Render](https://render.com).
+  </Card>
+  <Card title="Nginx or reverse proxy" icon="globe">
+    On a bare server, Nginx (or another reverse proxy such as Caddy) should sit in front of Gunicorn to handle TLS termination, static file serving, and connection management.
+  </Card>
+</CardGroup>
+
+## Step-by-step Deployment with Gunicorn
+
+The following steps walk through a full production deployment on a Linux server. Run all commands from the project root (the directory that contains `manage.py`).
+
+<Steps>
+  <Step title="Clone the repository and install dependencies">
+    Clone the repository from GitHub, create a virtual environment, and install all required packages from `requirements.txt`. This includes Django 5, Gunicorn, pandas, openpyxl, and django-import-export.
+
+    ```bash
+    git clone https://github.com/LucPinheiro/gestor-tarea-django.git
+    cd gestor-tarea-django
+
+    python -m venv venv
+    source venv/bin/activate
+
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Set environment variables">
+    Before running any Django management commands, export the required environment variables. At minimum you need `SECRET_KEY`, `DEBUG`, and `ALLOWED_HOSTS`. Refer to the [Environment Variables and Settings Reference](/deployment/environment) page for the full list of available variables and recommended values.
+
+    ```bash
+    export SECRET_KEY="your-secure-random-secret-key"
+    export DEBUG="False"
+    export ALLOWED_HOSTS="yourdomain.com,www.yourdomain.com"
+    ```
+
+    For persistent configuration, write these values to a `.env` file and load it with a tool like `python-dotenv`, or inject them through your server's environment management (systemd `EnvironmentFile`, Docker `--env-file`, etc.).
+  </Step>
+
+  <Step title="Collect static files">
+    Django's `collectstatic` command gathers all static assets from each installed app into the directory defined by `STATIC_ROOT` (`BASE_DIR / 'staticfiles'` by default). This must be run before starting the application server so Nginx can serve CSS, JavaScript, and images directly.
+
+    ```bash
+    python manage.py collectstatic --noinput
+    ```
+  </Step>
+
+  <Step title="Apply database migrations">
+    Run all pending migrations to bring the database schema up to date. On a fresh deployment this creates all required tables. On subsequent deployments it applies only the new migration files.
+
+    ```bash
+    python manage.py migrate
+    ```
+  </Step>
+
+  <Step title="Start Gunicorn">
+    Launch Gunicorn pointing at the WSGI application object defined in `mi_proyecto/wsgi.py`. The module path `mi_proyecto.wsgi:application` maps directly to the `application` variable exposed by `get_wsgi_application()` in that file.
+
+    ```bash
+    gunicorn mi_proyecto.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    ```
+
+    - `--bind 0.0.0.0:8000` — listens on all interfaces on port 8000. Nginx will proxy requests to this address; you do not need to expose port 8000 publicly.
+    - `--workers 3` — spawns three worker processes, which is a reasonable default for small to medium deployments. A common formula is `(2 × CPU cores) + 1`.
+
+    For a long-running production process, manage Gunicorn with **systemd** or **Supervisor** rather than running it directly in the terminal.
+
+    ```ini systemd unit example (/etc/systemd/system/gestor-tareas.service)
+    [Unit]
+    Description=Gunicorn daemon for Gestor de Tareas Django
+    After=network.target
+
+    [Service]
+    User=www-data
+    WorkingDirectory=/srv/gestor-tarea-django
+    EnvironmentFile=/srv/gestor-tarea-django/.env
+    ExecStart=/srv/gestor-tarea-django/venv/bin/gunicorn \
+              mi_proyecto.wsgi:application \
+              --bind 0.0.0.0:8000 \
+              --workers 3
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+  </Step>
+
+  <Step title="Configure Nginx as a reverse proxy">
+    Nginx forwards incoming HTTP/HTTPS traffic to Gunicorn and serves static files directly from the `staticfiles/` directory collected in step 3, bypassing Django entirely for those requests.
+
+    ```nginx /etc/nginx/sites-available/gestor-tareas
+    server {
+        listen 80;
+        server_name yourdomain.com www.yourdomain.com;
+
+        # Serve collected static files directly
+        location /static/ {
+            alias /srv/gestor-tarea-django/staticfiles/;
+        }
+
+        # Forward all other requests to Gunicorn
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    ```
+
+    Enable the site and reload Nginx:
+
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/gestor-tareas /etc/nginx/sites-enabled/
+    sudo nginx -t
+    sudo systemctl reload nginx
+    ```
+  </Step>
+</Steps>
+
+## Deploying to Render (PaaS)
+
+The live demo of Gestor de Tareas Django is hosted on Render at **[https://django-gestortarea.onrender.com/](https://django-gestortarea.onrender.com/)**. Render is a good choice for getting a production deployment running quickly without manually managing servers, Nginx, or systemd units.
+
+<Steps>
+  <Step title="Connect the GitHub repository">
+    Log in to [Render](https://render.com), click **New → Web Service**, and connect your GitHub account. Select the `gestor-tarea-django` repository. Render will detect it as a Python project.
+  </Step>
+
+  <Step title="Set the Build Command">
+    In the Render service settings, set the **Build Command** to install dependencies, apply migrations, and collect static files in a single step:
+
+    ```bash
+    pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
+    ```
+  </Step>
+
+  <Step title="Set the Start Command">
+    Set the **Start Command** to launch Gunicorn using the WSGI module from `mi_proyecto/wsgi.py`:
+
+    ```bash
+    gunicorn mi_proyecto.wsgi:application
+    ```
+  </Step>
+
+  <Step title="Add environment variables">
+    In the Render dashboard, navigate to **Environment** and add the following key–value pairs:
+
+    | Key              | Value                                      |
+    | ---------------- | ------------------------------------------ |
+    | `SECRET_KEY`     | A long, random, unique string              |
+    | `DEBUG`          | `False`                                    |
+    | `ALLOWED_HOSTS`  | `django-gestortarea.onrender.com`          |
+
+    See the [Environment Variables and Settings Reference](/deployment/environment) page for details on each setting and how to wire them into `settings.py`.
+  </Step>
+</Steps>
+
+## Production Checklist
+
+Review each item below before routing live traffic to the application.
+
+<Warning>
+  **Disable debug mode.** The repository's `settings.py` ships with `DEBUG = True`. This must be overridden to `False` in production. Running with `DEBUG = True` exposes full stack traces and internal configuration details to anyone who triggers an error.
+</Warning>
+
+<Warning>
+  **Replace the default SECRET\_KEY.** The key committed in `settings.py` is a public, insecure placeholder (`django-insecure-@hc_xr=e4$pg=...`). Generate a new value with `python -c "import secrets; print(secrets.token_urlsafe(50))"` and set it via the `SECRET_KEY` environment variable. Never commit a real secret key to version control.
+</Warning>
+
+<Info>
+  **Set ALLOWED\_HOSTS to your actual domain(s).** The default `ALLOWED_HOSTS = ['*']` in `settings.py` is permissive and suitable for development only. In production, set it to the exact hostname(s) your application will respond to, for example `yourdomain.com,www.yourdomain.com`.
+</Info>
+
+<Tip>
+  **Use a managed PostgreSQL database for multi-user deployments.** The default database backend is SQLite (`db.sqlite3` in the project root), which is fine for development and single-user use. For any deployment where multiple requests may write to the database concurrently, switch to PostgreSQL. See the [Environment Variables and Settings Reference](/deployment/environment) page for the configuration snippet.
+</Tip>
+
+<Note>
+  **Run `collectstatic` before every deployment.** Static files (CSS, JavaScript) are stored under each app's `static/` directory during development. The `collectstatic` command copies them into `STATIC_ROOT` (`staticfiles/` by default) so Nginx or your PaaS can serve them. Re-run it whenever static files change.
+</Note>

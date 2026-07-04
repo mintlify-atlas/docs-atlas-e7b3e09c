@@ -1,0 +1,79 @@
+{
+  "projectType": "saas",
+  "projectName": "Gestor de Tareas Django",
+  "projectDescription": "A Django-based web application for comprehensive task management with CRUD operations, Kanban/list views, CSV import/export, and built-in authentication.",
+  "theme": "almond",
+  "primaryColor": "#4F46E5",
+  "lightColor": "#EEF2FF",
+  "darkColor": "#312E81",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "configuration"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/task-management",
+              "features/views",
+              "features/csv-import-export",
+              "features/authentication"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/data-model",
+              "reference/url-routes",
+              "reference/admin-panel"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/production",
+              "deployment/environment"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Full CRUD task management via web forms",
+    "Kanban board view with four status columns (Borrador, Pendiente, En proceso, Completada)",
+    "Tabular list view with multi-select and bulk actions",
+    "CSV import with duplicate detection and error handling",
+    "CSV export for individual tasks, selected tasks, or full dataset",
+    "Django built-in authentication (login/logout) with view protection via @login_required",
+    "Priority system (Low/Medium/High) with quick toggle from detail view",
+    "Inline status changes without full form submission",
+    "Pagination on list view (10 tasks per page)",
+    "Responsive Bootstrap 5 UI with custom CSS",
+    "Full-text search by task title and status filter",
+    "Django admin interface for superuser management"
+  ],
+  "publicApiSurface": [
+    "GET/POST /tareas/ — list and filter tasks (Kanban or list view)",
+    "GET/POST /crear/ — create a new task",
+    "GET/POST /editar/<id>/ — edit an existing task",
+    "GET/POST /eliminar/<id>/ — delete a task with confirmation",
+    "GET /detalle/<id>/ — view task detail with navigation",
+    "GET/POST /exportar/ — export tasks to CSV",
+    "GET/POST /importar/ — import tasks from CSV",
+    "GET /cambiar-estado/<id>/<estado>/ — quick status change",
+    "POST /eliminar-seleccionadas/ — bulk delete selected tasks",
+    "GET /tareas/<id>/prioridad/<prioridad>/ — change task priority",
+    "GET / — login page",
+    "POST /logout/ — log out",
+    "GET/POST /admin/ — Django admin panel"
+  ]
+}

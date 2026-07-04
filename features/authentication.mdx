@@ -1,0 +1,155 @@
+---
+title: "User Authentication in Gestor de Tareas Django"
+sidebarTitle: "Authentication"
+description: "Gestor de Tareas Django uses Django's built-in session authentication — learn how to log in, log out, manage protected views, and create new users."
+---
+
+Gestor de Tareas Django delegates all authentication to Django's built-in authentication framework. There are no custom login models, no API tokens, and no third-party OAuth providers — just the standard `User` model, session cookies, and `LoginView`/`LogoutView` class-based views wired up in `mi_proyecto/urls.py`. This keeps the security surface small and lets you manage users entirely through the Django admin.
+
+## Logging In
+
+The login page is served at the root URL `/` using Django's built-in `LoginView` with a custom template.
+
+```
+http://127.0.0.1:8000/
+```
+
+The URL pattern in `mi_proyecto/urls.py` is:
+
+```python
+path('', auth_views.LoginView.as_view(
+    template_name='tareas/login.html'
+), name='login'),
+```
+
+<Steps>
+  <Step title="Open the login page">
+    Navigate to `http://127.0.0.1:8000/`. Unauthenticated users land here automatically when they try to access any protected view.
+  </Step>
+
+  <Step title="Enter your credentials">
+    The login form accepts the standard Django `User` model fields:
+
+    <ParamField path="username" type="string" required>
+      The unique username assigned when the account was created.
+    </ParamField>
+
+    <ParamField path="password" type="string" required>
+      The account password. Django stores passwords as salted hashes — they are never stored or transmitted in plain text.
+    </ParamField>
+  </Step>
+
+  <Step title="Submit and redirect">
+    On successful authentication, Django creates a session and redirects the browser to `LOGIN_REDIRECT_URL`, which is set to `/tareas/`. You will land on the Kanban view of your task list.
+
+    If the credentials are invalid, the login page re-renders with a validation error and no session is created.
+  </Step>
+</Steps>
+
+---
+
+## Logging Out
+
+Logout is handled by Django's built-in `LogoutView` at `/logout/`.
+
+```python
+path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+```
+
+<Steps>
+  <Step title="Send a POST request to /logout/">
+    Django's `LogoutView` requires a `POST` request to invalidate the session. This is enforced to prevent cross-site request forgery (CSRF) logout attacks. The logout link or button in the application includes a CSRF token.
+  </Step>
+
+  <Step title="Redirect after logout">
+    After the session is destroyed, `LogoutView` redirects to `LOGOUT_REDIRECT_URL`, which resolves to `/` — the login page. You will need to authenticate again to access any protected view.
+  </Step>
+</Steps>
+
+<Note>
+  This application uses Django's session-based authentication. There is no API key, JWT token, or other stateless authentication mechanism. Every request to a protected view is validated against the session cookie set at login time.
+</Note>
+
+---
+
+## Protected Views
+
+Most views require an active login session. The `@login_required` decorator is applied at the function level in `tareas/views.py`. Requests from unauthenticated users are redirected to `LOGIN_URL = 'login'`, which resolves to `/`.
+
+### Views decorated with `@login_required`
+
+<AccordionGroup>
+  <Accordion title="lista_tareas — GET /tareas/">
+    The main task list, available in Kanban (`?vista=kanban`) and list (`?vista=lista`) modes. Requires login to prevent public access to the full task database.
+  </Accordion>
+
+  <Accordion title="detalle_tarea — GET /detalle/<id>/">
+    Shows the full detail view for a single `Tarea`. Login is required because the detail page also exposes the edit, delete, and export controls.
+  </Accordion>
+
+  <Accordion title="editar_tarea — GET /editar/<id>/ and POST /editar/<id>/">
+    Renders and processes the task edit form. Requires login so that only authenticated users can modify existing tasks.
+  </Accordion>
+
+  <Accordion title="eliminar_tarea — GET /eliminar/<id>/ and POST /eliminar/<id>/">
+    Shows the deletion confirmation page (`GET`) and executes the deletion (`POST`). Both request methods require login.
+  </Accordion>
+
+  <Accordion title="exportar_csv — GET /exportar/?tarea_id=<id> and POST /exportar/">
+    Generates and streams a CSV download. Requires login to control who can extract data from the system.
+  </Accordion>
+
+  <Accordion title="importar_csv — GET /importar/ and POST /importar/">
+    Displays the CSV upload form (`GET`) and processes the uploaded file (`POST`). Requires login to prevent unauthorised bulk data creation.
+  </Accordion>
+
+  <Accordion title="cambiar_estado_simple — GET /cambiar-estado/<id>/<estado>/">
+    One-click state change from the detail view. Requires login so state transitions are always traceable to an authenticated user.
+  </Accordion>
+
+  <Accordion title="cambiar_prioridad — GET /tareas/<id>/prioridad/<prioridad>/">
+    One-click priority change from the star widget on the detail page. Requires login.
+  </Accordion>
+</AccordionGroup>
+
+### View without `@login_required`
+
+<Note>
+  `crear_tarea` at `/crear/` is **not** decorated with `@login_required` in the current source code. This means unauthenticated users can access the task creation form and submit new tasks without logging in. If your deployment requires authentication for all task operations, add the `@login_required` decorator to `crear_tarea` in `tareas/views.py`.
+</Note>
+
+---
+
+## Creating Users
+
+Gestor de Tareas Django does not include a self-service user registration page. New user accounts must be created by an administrator using one of the two methods below.
+
+<Tabs>
+  <Tab title="Superuser (CLI)">
+    Create an administrator account with full access to the Django admin panel by running the management command from your project root:
+
+    ```bash
+    python manage.py createsuperuser
+    ```
+
+    You will be prompted to enter a **username**, an optional **email address**, and a **password** (entered twice for confirmation). Once created, this account can log in at both `/` (the app) and `/admin/` (the Django admin).
+  </Tab>
+
+  <Tab title="Additional users (Admin panel)">
+    Once you have a superuser account, you can create additional user accounts through the Django admin interface:
+
+    <Steps>
+      <Step title="Log in to the admin panel">
+        Navigate to `http://127.0.0.1:8000/admin/` and sign in with your superuser credentials.
+      </Step>
+
+      <Step title="Open the Users section">
+        Under the **Authentication and Authorization** section, click **Users**, then click **Add user** in the top-right corner.
+      </Step>
+
+      <Step title="Set credentials">
+        Enter the new user's **username** and **password**, then click **Save**. On the next screen you can optionally set the user's name, email, and permission flags.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>

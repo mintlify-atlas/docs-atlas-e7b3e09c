@@ -1,0 +1,119 @@
+---
+title: "Configure Gestor de Tareas Django"
+sidebarTitle: "Configuration"
+description: "A full reference for mi_proyecto/settings.py — covering security, database, authentication redirects, static files, and locale settings for dev and production."
+---
+
+All runtime behaviour for Gestor de Tareas Django is controlled through `mi_proyecto/settings.py`, the standard Django settings module. The file is loaded automatically by `manage.py` via the `DJANGO_SETTINGS_MODULE` environment variable, which is pre-set to `mi_proyecto.settings`. The sections below document every setting you are likely to adjust, grouped by concern.
+
+<Warning>
+  The `SECRET_KEY` shipped in the repository is publicly known and **must never be used in production**. Any deployment that keeps the default key is vulnerable to cryptographic attacks against signed cookies, CSRF tokens, and password-reset links. See the [Replacing SECRET_KEY](#replacing-secret_key) section below for the recommended approach.
+</Warning>
+
+## Security Settings
+
+<ParamField path="SECRET_KEY" type="string" required>
+  A long, random string used by Django to sign cookies, sessions, and CSRF tokens.
+  The repository ships with the insecure development value `'django-insecure-@hc_xr=e4$pg=...'`.
+  This value **must be replaced** before going to production. See [Replacing SECRET_KEY](#replacing-secret_key).
+</ParamField>
+
+<ParamField path="DEBUG" type="boolean" default="True">
+  When `True`, Django renders detailed error pages and serves static files directly.
+  Set to `False` in production — doing so also enforces `ALLOWED_HOSTS` validation and disables verbose tracebacks.
+</ParamField>
+
+<ParamField path="ALLOWED_HOSTS" type="list[string]" default="['*']">
+  A list of host/domain names that Django will serve. The default `['*']` accepts any host and is suitable for local development only.
+  In production, restrict this to your actual domain(s), e.g. `['yourdomain.com', 'www.yourdomain.com']`.
+</ParamField>
+
+## Database
+
+<ParamField path="DATABASES.default.ENGINE" type="string" default="django.db.backends.sqlite3">
+  The database backend. Defaults to Django's built-in SQLite driver — no additional installation required for development.
+  Switch to `django.db.backends.postgresql` or another backend for production workloads.
+</ParamField>
+
+<ParamField path="DATABASES.default.NAME" type="path" default="BASE_DIR / 'db.sqlite3'">
+  The file-system path to the SQLite database file. `BASE_DIR` resolves to the project root directory (where `manage.py` lives), so the database is created as `gestor-tarea-django/db.sqlite3` on first migration.
+</ParamField>
+
+## Internationalisation & Localisation
+
+<ParamField path="LANGUAGE_CODE" type="string" default="'es-es'">
+  Sets the locale for Django's built-in translatable strings (admin UI, form validation messages, etc.) to Spanish (Spain).
+</ParamField>
+
+<ParamField path="TIME_ZONE" type="string" default="'Europe/Madrid'">
+  The default time zone used when storing and displaying `DateTimeField` values. All task timestamps are recorded relative to this zone.
+</ParamField>
+
+## Authentication Redirects
+
+<ParamField path="LOGIN_URL" type="string" default="'login'">
+  The named URL pattern that unauthenticated users are redirected to when they attempt to access a protected view. Resolves to the root path `/` (the `LoginView` defined in `mi_proyecto/urls.py`).
+</ParamField>
+
+<ParamField path="LOGIN_REDIRECT_URL" type="string" default="'/tareas/'">
+  The URL users are redirected to immediately after a successful login. Points to the main task list.
+</ParamField>
+
+<ParamField path="LOGOUT_REDIRECT_URL" type="string" default="'/'">
+  The URL users are redirected to after logging out. Points back to the login page at the root path.
+</ParamField>
+
+## Static Files
+
+<ParamField path="STATIC_URL" type="string" default="'static/'">
+  The URL prefix under which static assets (CSS, JavaScript, images) are served during development.
+</ParamField>
+
+<ParamField path="STATIC_ROOT" type="path" default="BASE_DIR / 'staticfiles'">
+  The absolute directory where `collectstatic` copies every static file from all installed apps.
+  This directory is what your web server (nginx, gunicorn, etc.) should serve in production.
+</ParamField>
+
+## Replacing SECRET\_KEY
+
+Load the secret key from an environment variable so it is never committed to source control:
+
+```python
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Read SECRET_KEY from the environment; fall back to a safe error in production.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+
+if not SECRET_KEY:
+    raise ValueError(
+        "The DJANGO_SECRET_KEY environment variable is not set. "
+        "Set it before starting the server."
+    )
+```
+
+Set the variable in your shell or deployment environment before starting the server:
+
+```bash
+export DJANGO_SECRET_KEY="your-long-random-secret-key-here"
+```
+
+You can generate a secure key with Python:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
+## Collecting Static Files for Production
+
+Before deploying with gunicorn (or any other WSGI server), copy all static assets into `STATIC_ROOT` so they can be served by a dedicated web server:
+
+```bash
+python manage.py collectstatic
+```
+
+<Note>
+  Run `collectstatic` every time you deploy updated CSS or JavaScript. The command copies files from `tareas/static/` and all other installed apps into `BASE_DIR / 'staticfiles'`. Your web server should be configured to serve that directory under the `STATIC_URL` prefix.
+</Note>

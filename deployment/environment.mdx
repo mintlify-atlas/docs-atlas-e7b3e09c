@@ -1,0 +1,123 @@
+---
+title: "Environment Variables and Settings Reference"
+sidebarTitle: "Environment"
+description: "A complete reference for all key settings in mi_proyecto/settings.py and how to override each one via environment variables for a secure production deployment."
+---
+
+Gestor de Tareas Django stores its entire configuration in `mi_proyecto/settings.py`. The file ships with development-friendly defaults — `DEBUG = True`, a hardcoded `SECRET_KEY`, and `ALLOWED_HOSTS = ['*']` — that are intentionally unsafe for production. The recommended approach is to keep `settings.py` in version control unchanged and override the sensitive or environment-specific values through OS environment variables at runtime. This keeps secrets out of source code and makes it trivial to use different values across development, staging, and production environments.
+
+## Recommended Pattern
+
+Add the following overrides at the top of `settings.py` (after the existing imports) so that each critical value is read from the environment when present and falls back to a safe default only for local development.
+
+```python settings.py (production overrides)
+import os
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'change-me-in-production')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1').split(',')
+```
+
+Once these lines are in place, you can inject values through shell exports, a `.env` file loaded by `python-dotenv`, a systemd `EnvironmentFile`, or the environment variable panel of your PaaS (such as Render).
+
+## Settings Reference
+
+The following settings are present in `mi_proyecto/settings.py`. Each entry describes the default value as it exists in the repository, the expected type, and how the setting affects the running application.
+
+<ParamField path="SECRET_KEY" type="string" required>
+  Django's cryptographic signing key. Used to sign cookies, CSRF tokens, session data, and password-reset links. The repository contains a public placeholder value (`django-insecure-@hc_xr=e4$pg=...`) which **must** be replaced before going live. Generate a new key with:
+
+  ```bash
+  python -c "import secrets; print(secrets.token_urlsafe(50))"
+  ```
+
+  Set the result as the `SECRET_KEY` environment variable. Never commit a real key to version control.
+</ParamField>
+
+<ParamField path="DEBUG" type="string ('True' / 'False')" default="True">
+  Controls Django's debug mode. When `True`, Django renders detailed error pages with full stack traces and local variable values — invaluable during development but a significant information leak in production. Set the `DEBUG` environment variable to the string `'False'` in all non-development environments. The override pattern in the section above converts the string to a Python boolean with `== 'True'`.
+</ParamField>
+
+<ParamField path="ALLOWED_HOSTS" type="comma-separated string" default="'*'">
+  A list of hostnames or IP addresses that Django will serve. The repository default `['*']` accepts requests from any host, which is convenient locally but disables Django's host-header validation in production. Set the `ALLOWED_HOSTS` environment variable to a comma-separated list of the actual domain(s) your application runs on, for example `yourdomain.com,www.yourdomain.com`. The override pattern splits on commas to produce the list Django expects.
+</ParamField>
+
+<ParamField path="DATABASES.ENGINE" type="string" default="django.db.backends.sqlite3">
+  The database backend Django uses to persist data. The default is SQLite, which requires no additional installation and stores all data in a single file on disk. For production deployments that serve more than one concurrent user, switch to `django.db.backends.postgresql`. See [Switching to PostgreSQL](#switching-to-postgresql) below.
+</ParamField>
+
+<ParamField path="DATABASES.NAME" type="string" default="BASE_DIR / 'db.sqlite3'">
+  The database identifier. For SQLite this is the filesystem path to the `.db` file; for PostgreSQL it is the name of the database. The repository default resolves to `db.sqlite3` in the project root directory.
+</ParamField>
+
+<ParamField path="LANGUAGE_CODE" type="string" default="es-es">
+  The default language for Django's built-in translations (admin interface, form error messages, etc.). Set to `'es-es'` (Spanish — Spain) in the repository. Change this to a different BCP 47 tag if you need a different locale.
+</ParamField>
+
+<ParamField path="TIME_ZONE" type="string" default="Europe/Madrid">
+  The default time zone used when storing and displaying datetime values. Corresponds to the IANA time zone database name. Set to `'Europe/Madrid'` in the repository. `USE_TZ = True` is also enabled, which means Django stores all datetimes in UTC internally and converts to `TIME_ZONE` for display.
+</ParamField>
+
+<ParamField path="LOGIN_URL" type="string" default="login">
+  The URL name (not path) that Django redirects unauthenticated users to when they try to access a protected view. Corresponds to the `login` named URL pattern in the project's URL configuration.
+</ParamField>
+
+<ParamField path="LOGIN_REDIRECT_URL" type="string" default="/tareas/">
+  The URL path Django redirects users to after a successful login when no explicit `next` parameter is present in the request. Defaults to `/tareas/`, the main task list view.
+</ParamField>
+
+<ParamField path="LOGOUT_REDIRECT_URL" type="string" default="/">
+  The URL path Django redirects users to immediately after they log out. Defaults to `/`, the application root.
+</ParamField>
+
+<ParamField path="STATIC_URL" type="string" default="static/">
+  The URL prefix under which static files are served. With the default value, a file at `tareas/static/tareas/style.css` is reachable at `/static/tareas/style.css`. This is the URL Nginx should match in its `location /static/` block.
+</ParamField>
+
+<ParamField path="STATIC_ROOT" type="string" default="BASE_DIR / 'staticfiles'">
+  The absolute filesystem path that `python manage.py collectstatic` writes all static files into. Resolves to `staticfiles/` inside the project root. Nginx (or your PaaS) must be configured to serve files from this directory directly. This directory should not be committed to version control — add `staticfiles/` to `.gitignore`.
+</ParamField>
+
+## Switching to PostgreSQL
+
+<Info>
+  SQLite is perfectly adequate for development and single-user production deployments. For any scenario where multiple users may write to the database at the same time — or where you need transactional reliability at scale — PostgreSQL is the recommended backend. Render and most other PaaS providers offer managed PostgreSQL add-ons that are straightforward to attach to a Django application.
+</Info>
+
+Replace the `DATABASES` block in `settings.py` with the following configuration. Each value is read from the environment so the same `settings.py` can be used across all environments without modification.
+
+```python settings.py
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'gestor_tareas'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+    }
+}
+```
+
+The corresponding environment variables are:
+
+| Variable      | Description                                  | Default         |
+| ------------- | -------------------------------------------- | --------------- |
+| `DB_NAME`     | Name of the PostgreSQL database              | `gestor_tareas` |
+| `DB_USER`     | PostgreSQL role / username                   | `postgres`      |
+| `DB_PASSWORD` | Password for the PostgreSQL role             | _(empty)_       |
+| `DB_HOST`     | Hostname or IP of the PostgreSQL server      | `localhost`     |
+| `DB_PORT`     | TCP port the PostgreSQL server listens on    | `5432`          |
+
+You must also add the `psycopg2` adapter to `requirements.txt`:
+
+```text requirements.txt
+psycopg2-binary>=2.9
+```
+
+After updating `requirements.txt`, reinstall dependencies and run migrations against the new database:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+```

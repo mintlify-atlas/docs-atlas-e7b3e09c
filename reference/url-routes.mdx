@@ -1,0 +1,457 @@
+---
+title: "URL Routes Reference for Gestor de Tareas Django"
+sidebarTitle: "URL Routes"
+description: "Every URL pattern in Gestor de Tareas Django: HTTP methods, view functions, URL names, query parameters, and authentication requirements."
+---
+
+All URL patterns for Gestor de Tareas Django are declared in a single file: `mi_proyecto/urls.py`. The project uses Django's `path()` router and mixes custom view functions (imported from `tareas.views`) with Django's built-in class-based `LoginView` and `LogoutView` from `django.contrib.auth`. Authenticated routes enforce login via the `@login_required` decorator in the view layer; unauthenticated requests are redirected to `LOGIN_URL = 'login'` (i.e., `/`).
+
+## URL Configuration
+
+```python mi_proyecto/urls.py
+from django.contrib import admin
+from django.urls import path
+from tareas import views
+from django.contrib.auth import views as auth_views
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', auth_views.LoginView.as_view(
+        template_name='tareas/login.html'
+    ), name='login'),
+    path('tareas/', views.lista_tareas, name='lista_tareas'),
+    path('crear/', views.crear_tarea, name='crear_tarea'),
+    path('editar/<int:id>/', views.editar_tarea, name='editar_tarea'),
+    path('eliminar/<int:id>/', views.eliminar_tarea, name='eliminar_tarea'),
+    path('exportar/', views.exportar_csv, name='exportar_csv'),
+    path('importar/', views.importar_csv, name='importar_csv'),
+    path('detalle/<int:id>/', views.detalle_tarea, name='detalle_tarea'),
+    path('cambiar-estado/<int:id>/<str:estado>/',
+         views.cambiar_estado_simple,
+         name='cambiar_estado_simple'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('eliminar-seleccionadas/', views.eliminar_tareas_seleccionadas, name='eliminar_tareas_seleccionadas'),
+    path('tareas/<int:id>/prioridad/<int:prioridad>/', views.cambiar_prioridad, name='cambiar_prioridad'),
+]
+```
+
+## Route Details
+
+The sections below document each route individually. Routes that require authentication redirect unauthenticated users to `/` (the login page) as configured by `LOGIN_URL = 'login'` and `LOGIN_REDIRECT_URL = '/tareas/'` in `settings.py`.
+
+---
+
+### `GET /` — Login Page
+
+<ParamField path="name" type="string">
+  `login`
+</ParamField>
+<ParamField path="view" type="string">
+  `django.contrib.auth.views.LoginView` — renders `tareas/login.html`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Public — no login required
+</ParamField>
+
+Displays the login form. On successful authentication, Django redirects to `LOGIN_REDIRECT_URL` (`/tareas/`). After logout, `LOGOUT_REDIRECT_URL` also points here (`/`).
+
+---
+
+### `GET /tareas/` — Task List
+
+<ParamField path="name" type="string">
+  `lista_tareas`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.lista_tareas`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Renders the main task list. Supports both a **Kanban** view (tasks grouped by state in columns) and a **list** view (paginated flat table), toggled via the `vista` query parameter. Tasks are ordered by `estado` then `id`. Pagination is set to **10 tasks per page**.
+
+**Query Parameters**
+
+<ParamField query="vista" type="string" default="kanban">
+  Switches the display mode. Accepted values: `kanban`, `lista`.
+</ParamField>
+<ParamField query="estado" type="string">
+  Filters the list to tasks matching the given state. Accepted values: `Borrador`, `Pendiente`, `En proceso`, `Completada`.
+</ParamField>
+<ParamField query="buscar" type="string">
+  Case-insensitive substring filter applied to `titulo` (`icontains` lookup).
+</ParamField>
+<ParamField query="page" type="integer" default="1">
+  Page number for the paginated list view.
+</ParamField>
+
+---
+
+### `GET /crear/` — New Task Form
+
+<ParamField path="name" type="string">
+  `crear_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.crear_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Public — no `@login_required` decorator is applied to this view
+</ParamField>
+
+Renders an empty `TareaForm` in `tareas/detalle.html` with `modo_formulario=True` and `tarea=None`.
+
+---
+
+### `POST /crear/` — Submit New Task
+
+<ParamField path="name" type="string">
+  `crear_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.crear_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Public
+</ParamField>
+
+Validates the submitted `TareaForm`. On success, saves the new `Tarea` and redirects to `detalle_tarea` for the newly created task ID. On failure, re-renders the form with validation errors.
+
+---
+
+### `GET /editar/<id>/` — Edit Task Form
+
+<ParamField path="name" type="string">
+  `editar_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.editar_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Fetches the `Tarea` with the given `id` (404 if not found) and renders a pre-populated `TareaForm` in `tareas/detalle.html` with `modo_formulario=True`.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to edit.
+</ParamField>
+
+---
+
+### `POST /editar/<id>/` — Submit Edit Form
+
+<ParamField path="name" type="string">
+  `editar_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.editar_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Validates the submitted form bound to the existing `Tarea` instance. On success, saves and redirects to `detalle_tarea`, setting a success message via `django.contrib.messages`. On failure, re-renders with errors.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to update.
+</ParamField>
+
+---
+
+### `GET /eliminar/<id>/` — Delete Confirmation Page
+
+<ParamField path="name" type="string">
+  `eliminar_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.eliminar_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Renders `tareas/confirmar_eliminar.html` with the `Tarea` object so the template can display task details before the user confirms deletion.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to delete.
+</ParamField>
+
+---
+
+### `POST /eliminar/<id>/` — Confirm Delete
+
+<ParamField path="name" type="string">
+  `eliminar_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.eliminar_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Deletes the specified `Tarea` and redirects to `/tareas/?vista=lista` with a success message.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to delete.
+</ParamField>
+
+---
+
+### `GET /detalle/<id>/` — Task Detail View
+
+<ParamField path="name" type="string">
+  `detalle_tarea`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.detalle_tarea`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Renders the read-only detail view for a single task in `tareas/detalle.html` with `modo_formulario=False`. Also computes the task's position in the full ordered list and provides `anterior`/`siguiente` navigation references.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to display.
+</ParamField>
+
+**Query Parameters**
+
+<ParamField query="vista" type="string" default="kanban">
+  Passed through to the template so the "back" navigation link can return to the correct list view mode.
+</ParamField>
+<ParamField query="page" type="string" default="1">
+  Passed through to preserve the current list page when navigating back.
+</ParamField>
+<ParamField query="seleccion" type="string">
+  Defaults to the task's own `id` as a string. Used by the template to highlight the active row in list view.
+</ParamField>
+
+---
+
+### `GET /exportar/` — Export Single Task as CSV
+
+<ParamField path="name" type="string">
+  `exportar_csv`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.exportar_csv`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Returns a CSV file attachment (`tareas.csv`). When `tarea_id` is supplied, only that task is exported. When `tarea_id` is absent and no POST body is present, all tasks are exported ordered by `estado`.
+
+**Query Parameters**
+
+<ParamField query="tarea_id" type="integer">
+  If provided, restricts the export to the single task with this primary key.
+</ParamField>
+
+**CSV Columns (in order):** `id`, `titulo`, `descripcion`, `estado`, `prioridad`, `fecha_limite`, `fecha_creada`
+
+---
+
+### `POST /exportar/` — Export Selected Tasks as CSV
+
+<ParamField path="name" type="string">
+  `exportar_csv`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.exportar_csv`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Accepts a list of task IDs in the POST body. Exports only those tasks, ordered by `estado`. If the list is empty and no `tarea_id` query param is set, all tasks are exported.
+
+**POST Body Parameters**
+
+<ParamField body="tareas_seleccionadas" type="string[]">
+  A multi-value list of task primary keys to include in the export.
+</ParamField>
+
+---
+
+### `GET /importar/` — Import CSV Form
+
+<ParamField path="name" type="string">
+  `importar_csv`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.importar_csv`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Renders `tareas/importar_csv.html` with a file upload form.
+
+---
+
+### `POST /importar/` — Upload CSV File
+
+<ParamField path="name" type="string">
+  `importar_csv`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.importar_csv`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Processes the uploaded CSV file. Rows whose `id` already exists in the database are skipped (not overwritten). Rows with processing errors are silently counted as `errores`. Encoding is attempted first as `utf-8-sig`, then falls back to `latin-1`. On completion, redirects to `lista_tareas` with an appropriate success or warning message.
+
+**POST Body Parameters**
+
+<ParamField body="archivo_csv" type="file" required>
+  A CSV file whose columns match the export format: `id`, `titulo`, `descripcion`, `estado`, `prioridad`, `fecha_limite`, `fecha_creada`.
+</ParamField>
+
+<Note>
+  The import skips any row whose `id` already exists in the `tareas_tarea` table. To update existing tasks, edit them individually via `/editar/<id>/`.
+</Note>
+
+---
+
+### `GET /cambiar-estado/<id>/<estado>/` — Quick State Change
+
+<ParamField path="name" type="string">
+  `cambiar_estado_simple`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.cambiar_estado_simple`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Sets `tarea.estado` to the provided `estado` value and saves. Redirects to `detalle_tarea` for the same task with a success message.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to update.
+</ParamField>
+<ParamField path="estado" type="string" required>
+  New state value. Must be one of: `Borrador`, `Pendiente`, `En proceso`, `Completada`.
+</ParamField>
+
+<Warning>
+  No server-side validation is performed on the `estado` path parameter beyond what Django's `<str:estado>` converter provides (any non-empty string). Passing a value outside the `ESTADOS` choices will persist an invalid state in the database. Always use one of the four defined values.
+</Warning>
+
+---
+
+### `POST /logout/` — Log Out
+
+<ParamField path="name" type="string">
+  `logout`
+</ParamField>
+<ParamField path="view" type="string">
+  `django.contrib.auth.views.LogoutView`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Session-based — clears the current user's session
+</ParamField>
+
+Logs out the authenticated user and redirects to `LOGOUT_REDIRECT_URL` (`/`).
+
+---
+
+### `POST /eliminar-seleccionadas/` — Bulk Delete
+
+<ParamField path="name" type="string">
+  `eliminar_tareas_seleccionadas`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.eliminar_tareas_seleccionadas`
+</ParamField>
+<ParamField path="authentication" type="string">
+  No `@login_required` decorator — relies on session context from the list page
+</ParamField>
+
+Deletes all tasks whose IDs are present in the `tareas_seleccionadas` POST list. Redirects to `/tareas/?vista=lista` after deletion. Sets a singular or plural success message depending on how many tasks were deleted.
+
+**POST Body Parameters**
+
+<ParamField body="tareas_seleccionadas" type="string[]" required>
+  One or more task primary keys to delete.
+</ParamField>
+
+---
+
+### `GET /tareas/<id>/prioridad/<prioridad>/` — Quick Priority Change
+
+<ParamField path="name" type="string">
+  `cambiar_prioridad`
+</ParamField>
+<ParamField path="view" type="string">
+  `tareas.views.cambiar_prioridad`
+</ParamField>
+<ParamField path="authentication" type="string">
+  Required — `@login_required`
+</ParamField>
+
+Sets `tarea.prioridad` to the provided integer value and saves. Redirects to `detalle_tarea` for the same task.
+
+**Path Parameters**
+
+<ParamField path="id" type="integer" required>
+  Primary key of the task to update.
+</ParamField>
+<ParamField path="prioridad" type="integer" required>
+  New priority value. Must be one of: `1` (Baja), `2` (Media), `3` (Alta).
+</ParamField>
+
+---
+
+### `GET /admin/` — Django Admin
+
+<ParamField path="view" type="string">
+  `django.contrib.admin` — Django's built-in admin site
+</ParamField>
+<ParamField path="authentication" type="string">
+  Django admin's own authentication — requires a superuser or staff account
+</ParamField>
+
+Mounts the full Django administration interface. See the [Admin Panel reference](/reference/admin-panel) for configuration details.
+
+## Route Summary Table
+
+| Method | Path | URL Name | Auth Required |
+|--------|------|----------|---------------|
+| GET | `/` | `login` | No |
+| GET | `/tareas/` | `lista_tareas` | Yes |
+| GET | `/crear/` | `crear_tarea` | No |
+| POST | `/crear/` | `crear_tarea` | No |
+| GET | `/editar/<id>/` | `editar_tarea` | Yes |
+| POST | `/editar/<id>/` | `editar_tarea` | Yes |
+| GET | `/eliminar/<id>/` | `eliminar_tarea` | Yes |
+| POST | `/eliminar/<id>/` | `eliminar_tarea` | Yes |
+| GET | `/detalle/<id>/` | `detalle_tarea` | Yes |
+| GET | `/exportar/` | `exportar_csv` | Yes |
+| POST | `/exportar/` | `exportar_csv` | Yes |
+| GET | `/importar/` | `importar_csv` | Yes |
+| POST | `/importar/` | `importar_csv` | Yes |
+| GET | `/cambiar-estado/<id>/<estado>/` | `cambiar_estado_simple` | Yes |
+| POST | `/logout/` | `logout` | Session |
+| POST | `/eliminar-seleccionadas/` | `eliminar_tareas_seleccionadas` | No |
+| GET | `/tareas/<id>/prioridad/<prioridad>/` | `cambiar_prioridad` | Yes |
+| GET/POST | `/admin/` | — | Admin auth |
